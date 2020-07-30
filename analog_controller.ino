@@ -1,28 +1,57 @@
+#include "api.h"
+
 #define outputA 14
 #define outputB 27
-int counter = 0; 
-int aState;
-int aLastState;
+#define switchPin 26
+#define BRIGHTNESS_INCREMENT 20
 
-void setup() { 
- pinMode (outputA,INPUT);
- pinMode (outputB,INPUT);
- 
- Serial.begin (9600);
- // Reads the initial state of the outputA
- aLastState = digitalRead(outputA);   
+int currentDeviceIndex = 0;
+long unsigned timeA;
+bool stateA;
+bool lastStateA;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(outputA,INPUT);
+  pinMode(outputB,INPUT);
+  pinMode(switchPin, INPUT);
+  
+  lastStateA = digitalRead(outputA);
+  timeA = millis();
+  
+  init_wifi();
+  get_surrounding_devices();
 } 
-void loop() { 
- aState = digitalRead(outputA); // Reads the "current" state of the outputA
- if (aState != aLastState){     
-   // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
-   if (digitalRead(outputB) != aState) { 
-     counter ++;
-   } else {
-     counter --;
-   }
-   Serial.print("Position: ");
-   Serial.println(counter);
- } 
- aLastState = aState; // Updates the previous state of the outputA with the current state
+  
+void loop() {
+  reconnect_wifi();
+  int id = json_msg["devices"][currentDeviceIndex]["id"];
+  
+  stateA = digitalRead(outputA);
+  if( stateA != lastStateA ){ 
+    if(abs(millis() - timeA) > 50 ){
+      if(digitalRead(outputB) != lastStateA){
+        Serial.println("Decreasing brightness");
+        increase_brightness(id, -BRIGHTNESS_INCREMENT);
+      }
+      else{
+        Serial.println("Increasing brightness");
+        increase_brightness(id, BRIGHTNESS_INCREMENT);
+      }
+      timeA = millis();
+    } 
+    lastStateA = stateA ;
+  }
+
+  if(!digitalRead(switchPin))  {
+    delay(300);
+    if(!digitalRead(switchPin))  {
+      get_surrounding_devices();
+      if(currentDeviceIndex == (json_msg["devices"].size()-1)) currentDeviceIndex = 0;
+      else currentDeviceIndex++;
+    } else  {
+      toggle(id);
+    }
+    delay(100);
+  }
 }
